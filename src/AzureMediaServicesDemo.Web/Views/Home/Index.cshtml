@@ -1,0 +1,71 @@
+﻿@{
+    ViewData["Title"] = "Azure Media Services Demo";
+}
+
+<h1 style="margin-bottom:50px">Personal Video Site</h1>
+
+<div class="row" style="margin-bottom:20px">
+    <select id="ajaxDropdown"></select>
+</div>
+<div class="row">
+    <video id="azuremediaplayer" class="azuremediaplayer amp-default-skin amp-big-play-centered" tabindex="0"></video>
+</div>
+<script>
+    var data;
+    $(document).ready(function () {
+        $.getJSON('api/video/getvideos', function (result) {
+            data = result;
+            FillDropdown("ajaxDropdown", result)
+        });
+
+        var myOptions = {
+            "nativeControlsForTouch": false,
+            controls: true,
+            autoplay: false,
+            width: "640",
+            height: "400",
+        }
+        myPlayer = amp("azuremediaplayer", myOptions);
+
+        $("#ajaxDropdown").change(function () {
+            var selectedValue = this.value;
+            var filteredArray = data.filter(function (video) {
+                return video.rowKey == selectedValue;
+            });
+
+
+            if (filteredArray.length > 0 && filteredArray[0].uri !== null) {
+                url = filteredArray[0].uri
+                myPlayer.src([
+                    {
+                        "src": url,
+                        "type": "application/vnd.ms-sstr+xml"
+                    }
+                ]);
+            }
+            else {
+                alert("No Video Source Found")
+            }
+        });
+    });
+
+    function FillDropdown(selector, vData) {
+        if (vData.length > 0) {
+            var vItems = [];
+            vItems.push('<option disabled selected=true">Select Video</option>');
+            for (var i in vData) {
+                if (vData[i].Selected)
+                    vItems.push('<option value="' + vData[i].Value + '">' + vData[i].Text + '</option>');
+                else
+                    vItems.push('<option value="' + vData[i].rowKey + '">' + vData[i].name + '</option>');
+            }
+            $('#' + selector).empty();
+            $('#' + selector).append(vItems.join(''));
+            return true;
+        }
+        else {
+            $('#' + selector).empty();
+            return false;
+        }
+    }
+</script>
