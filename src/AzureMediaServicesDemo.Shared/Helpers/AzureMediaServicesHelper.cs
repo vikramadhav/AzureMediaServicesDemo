@@ -24,9 +24,9 @@ namespace AzureMediaServicesDemo.Shared
     /// </remarks>
     public class AzureMediaServicesHelper : IAzureMediaServicesHelper
     {
-        public const string Transform = "CustomTransform";
+        private const string AdaptiveStreamingTransformName = "MyTransformWithAdaptiveStreamingPreset";
         private readonly IStorageHelper _storageHelpers;
-        private readonly ILogger _log;
+        private readonly ILogger<AzureMediaServicesHelper> _log;
         private readonly ConfigWrapper _config;
 
         /// <summary>
@@ -42,9 +42,10 @@ namespace AzureMediaServicesDemo.Shared
             _storageHelpers = storageHelper;
         }
 
+
         /// <summary>
         /// If the specified transform exists, get that transform.
-        /// If the it does not exist, creates a new transform with the specified output.
+        /// If the it does not exist, creates a new transform with the specified output. 
         /// In this case, the output is set to encode a video using one of the built-in encoding presets.
         /// </summary>
         /// <param name="client">The Media Services client.</param>
@@ -53,25 +54,39 @@ namespace AzureMediaServicesDemo.Shared
         /// <param name="transformName">The name of the transform.</param>
         /// <returns></returns>
         // <EnsureTransformExists>
-        private void EnsureTransformExists(IAzureMediaServicesClient client, string resourceGroupName, string accountName, Preset preset)
+        private static async Task<Transform> GetOrCreateTransformAsync(
+            IAzureMediaServicesClient client,
+            string resourceGroupName,
+            string accountName,
+            string transformName)
         {
             // Does a Transform already exist with the desired name? Assume that an existing Transform with the desired name
             // also uses the same recipe or Preset for processing content.
-            Transform transform = client.Transforms.Get(resourceGroupName, accountName, Transform);
+            Transform transform = await client.Transforms.GetAsync(resourceGroupName, accountName, transformName);
 
             if (transform == null)
             {
-                // Start by defining the desired outputs.
-                TransformOutput[] outputs = new TransformOutput[]
+                // You need to specify what you want it to produce as an output
+                TransformOutput[] output = new TransformOutput[]
                 {
-                    new TransformOutput(preset),
+                    new TransformOutput
+                    {
+                        // The preset for the Transform is set to one of Media Services built-in sample presets.
+                        // You can  customize the encoding settings by changing this to use "StandardEncoderPreset" class.
+                        Preset = new BuiltInStandardEncoderPreset()
+                        {
+                            // This sample uses the built-in encoding preset for Adaptive Bitrate Streaming.
+                            PresetName = EncoderNamedPreset.AdaptiveStreaming
+                        }
+                    }
                 };
 
                 // Create the Transform with the output defined above
-                transform = client.Transforms.CreateOrUpdate(resourceGroupName, accountName, Transform, outputs);
+                transform = await client.Transforms.CreateOrUpdateAsync(resourceGroupName, accountName, transformName, output);
             }
+
+            return transform;
         }
-        // </EnsureTransformExists>
 
         /// <summary>
         /// Takes input filename and creates, starts, and monitors processing job
@@ -83,7 +98,7 @@ namespace AzureMediaServicesDemo.Shared
         // <ProcessVideo>
         public async Task ProcessVideo(IAzureMediaServicesClient client, string fileName)
         {
-            EnsureTransformExists(client, _config.ResourceGroup, _config.AccountName, new VideoAnalyzerPreset("en-US"));
+          await  GetOrCreateTransformAsync(client, _config.ResourceGroup, _config.AccountName, AdaptiveStreamingTransformName);
 
             // Creating a unique suffix so that we don't have name collisions if you run the sample
             // multiple times without cleaning up.
@@ -94,24 +109,24 @@ namespace AzureMediaServicesDemo.Shared
             string inputAssetName = "input-" + uniqueness;
 
             // Create a new input Asset and upload the specified local video file into it.
-            await CreateInputAsset(client, _config.ResourceGroup, _config.AccountName, inputAssetName, fileName);
+            await CreateInputAssetAsync(client, _config.ResourceGroup, _config.AccountName, inputAssetName, fileName);
 
             // Use the name of the created input asset to create the job input.
             JobInput jobInput = new JobInputAsset(assetName: inputAssetName);
 
             // Output from the encoding Job must be written to an Asset, so let's create one
-            List<Asset> outputAssets = CreateOutputAsset(client, _config.ResourceGroup, _config.AccountName, outputAssetName);
+            Asset outputAsset = await CreateOutputAssetAsync(client, _config.ResourceGroup, _config.AccountName, outputAssetName);
 
-            Job job = SubmitJob(client, _config.ResourceGroup, _config.AccountName, Transform, jobName, jobInput, outputAssetName);
+            Job job = await SubmitJobAsync(client, _config.ResourceGroup, _config.AccountName, AdaptiveStreamingTransformName, jobName, jobInput, outputAssetName);
 
             // In this demo code, we will poll for Job status
             // Polling is not a recommended best practice for production applications because of the latency it introduces.
             // Overuse of this API may trigger throttling. Developers should instead use Event Grid.
-            job = WaitForJobToFinish(client, _config.ResourceGroup, _config.AccountName, Transform, jobName);
+            job = await WaitForJobToFinishAsync(client, _config.ResourceGroup, _config.AccountName, AdaptiveStreamingTransformName, jobName);
 
             if (job.State == JobState.Finished)
             {
-                StreamingLocator locator = CreateStreamingLocator(client, _config.ResourceGroup, _config.AccountName, outputAssets.FirstOrDefault().Name, locatorName);
+                StreamingLocator locator = CreateStreamingLocator(client, _config.ResourceGroup, _config.AccountName, outputAsset.Name, locatorName);
 
                 IList<string> urls = GetStreamingURLs(client, _config.ResourceGroup, _config.AccountName, locator.Name);
                 _log.LogInformation("Urls Created");
@@ -159,7 +174,7 @@ namespace AzureMediaServicesDemo.Shared
         /// <param name="jobInput"></param>
         /// <param name="outputAssetName">The (unique) name of the  output asset that will store the result of the encoding job. </param>
         // <SubmitJob>
-        private Job SubmitJob(IAzureMediaServicesClient client,
+        private static async Task<Job> SubmitJobAsync(IAzureMediaServicesClient client,
             string resourceGroupName,
             string accountName,
             string transformName,
@@ -169,15 +184,15 @@ namespace AzureMediaServicesDemo.Shared
         {
             JobOutput[] jobOutputs =
             {
-                new JobOutputAsset(outputAssetName)
+                new JobOutputAsset(outputAssetName),
             };
 
             // In this example, we are assuming that the job name is unique.
             //
             // If you already have a job with the desired name, use the Jobs.Get method
-            // to get the existing job. In Media Services v3, Get methods on entities returns null
+            // to get the existing job. In Media Services v3, Get methods on entities returns null 
             // if the entity doesn't exist (a case-insensitive check on the name).
-            Job job = client.Jobs.Create(
+            Job job = await client.Jobs.CreateAsync(
                 resourceGroupName,
                 accountName,
                 transformName,
@@ -202,38 +217,39 @@ namespace AzureMediaServicesDemo.Shared
         /// <param name="jobName">The name of the job you submitted.</param>
         /// <returns></returns>
         // <WaitForJobToFinish>
-        private Job WaitForJobToFinish(IAzureMediaServicesClient client,
+        private async Task<Job> WaitForJobToFinishAsync(IAzureMediaServicesClient client,
             string resourceGroupName,
             string accountName,
             string transformName,
             string jobName)
         {
-            int SleepInterval = 60 * 1000;
+            const int SleepIntervalMs = 60 * 1000;
 
             Job job = null;
 
-            while (true)
+            do
             {
-                job = client.Jobs.Get(resourceGroupName, accountName, transformName, jobName);
+                job = await client.Jobs.GetAsync(resourceGroupName, accountName, transformName, jobName);
 
-                if (job.State == JobState.Finished || job.State == JobState.Error || job.State == JobState.Canceled)
-                {
-                    break;
-                }
-
-                Console.WriteLine($"Job is {job.State}.");
+                Console.WriteLine($"Job is '{job.State}'.");
                 for (int i = 0; i < job.Outputs.Count; i++)
                 {
                     JobOutput output = job.Outputs[i];
-                    Console.Write($"\tJobOutput[{i}] is {output.State}.");
+                    Console.Write($"\tJobOutput[{i}] is '{output.State}'.");
                     if (output.State == JobState.Processing)
                     {
-                        Console.Write($"  Progress: {output.Progress}");
+                        Console.Write($"  Progress: '{output.Progress}'.");
                     }
+
                     Console.WriteLine();
                 }
-                System.Threading.Thread.Sleep(SleepInterval);
+
+                if (job.State != JobState.Finished && job.State != JobState.Error && job.State != JobState.Canceled)
+                {
+                    await Task.Delay(SleepIntervalMs);
+                }
             }
+            while (job.State != JobState.Finished && job.State != JobState.Error && job.State != JobState.Canceled);
 
             return job;
         }
@@ -242,40 +258,6 @@ namespace AzureMediaServicesDemo.Shared
         #endregion
 
         #region Asset Methods
-
-        /// <summary>
-        /// Creates an ouput asset. The output from the encoding Job must be written to an Asset.
-        /// </summary>
-        /// <param name="client">The Media Services client.</param>
-        /// <param name="resourceGroupName">The name of the resource group within the Azure subscription.</param>
-        /// <param name="accountName"> The Media Services account name.</param>
-        /// <param name="assetName">The output asset name.</param>
-        /// <returns></returns>
-        // <CreateOutputAsset>
-        private List<Asset> CreateOutputAsset(IAzureMediaServicesClient client, string resourceGroupName, string accountName, string assetName)
-        {
-            // Check if an Asset already exists
-            Asset outputAsset = client.Assets.Get(resourceGroupName, accountName, assetName);
-            Asset asset = new Asset();
-            string outputAssetName = assetName;
-
-            if (outputAsset != null)
-            {
-                // Name collision! In order to get the sample to work, let's just go ahead and create a unique asset name
-                // Note that the returned Asset can have a different name than the one specified as an input parameter.
-                // You may want to update this part to throw an Exception instead, and handle name collisions differently.
-                string uniqueness = @"-" + Guid.NewGuid().ToString();
-                outputAssetName += uniqueness;
-            }
-            List<Asset> assets = new List<Asset>
-            {
-                client.Assets.CreateOrUpdate(resourceGroupName, accountName, outputAssetName, asset)
-            };
-            return assets;
-        }
-        // </CreateOutputAsset>
-
-
 
         /// <summary>
         /// Creates a new input Asset and uploads the specified local video file into it.
@@ -287,54 +269,77 @@ namespace AzureMediaServicesDemo.Shared
         /// <param name="fileToUpload">The file you want to upload into the asset.</param>
         /// <returns></returns>
         // <CreateInputAsset>
-        private async Task<Asset> CreateInputAsset(IAzureMediaServicesClient client,
+        private async Task<Asset> CreateInputAssetAsync(
+            IAzureMediaServicesClient client,
             string resourceGroupName,
             string accountName,
             string assetName,
             string fileToUpload)
         {
-            Asset asset;
-            asset = client.Assets.Get(resourceGroupName, accountName, assetName);
+            // In this example, we are assuming that the asset name is unique.
+            //
+            // If you already have an asset with the desired name, use the Assets.Get method
+            // to get the existing asset. In Media Services v3, Get methods on entities returns null 
+            // if the entity doesn't exist (a case-insensitive check on the name).
 
-            if (asset == null)
-            {
-                // In this example, we are assuming that the asset name is unique.
-                //
-                // If you already have an asset with the desired name, use the Assets.Get method
-                // to get the existing asset. In Media Services v3, Get methods on entities returns null
-                // if the entity doesn't exist (a case-insensitive check on the name).
+            // Call Media Services API to create an Asset.
+            // This method creates a container in storage for the Asset.
+            // The files (blobs) associated with the asset will be stored in this container.
+            Asset asset = await client.Assets.CreateOrUpdateAsync(resourceGroupName, accountName, assetName, new Asset());
 
-                // Call Media Services API to create an Asset.
-                // This method creates a container in storage for the Asset.
-                // The files (blobs) associated with the asset will be stored in this container.
-                asset = client.Assets.CreateOrUpdate(resourceGroupName, accountName, assetName, new Asset());
+            // Use Media Services API to get back a response that contains
+            // SAS URL for the Asset container into which to upload blobs.
+            // That is where you would specify read-write permissions 
+            // and the exparation time for the SAS URL.
+            var response = await client.Assets.ListContainerSasAsync(
+                resourceGroupName,
+                accountName,
+                assetName,
+                permissions: AssetContainerPermission.ReadWrite,
+                expiryTime: DateTime.UtcNow.AddHours(4).ToUniversalTime());
 
-                // Use Media Services API to get back a response that contains
-                // SAS URL for the Asset container into which to upload blobs.
-                // That is where you would specify read-write permissions
-                // and the exparation time for the SAS URL.
-                var response = client.Assets.ListContainerSas(
-                      resourceGroupName,
-                      accountName,
-                      assetName,
-                      permissions: AssetContainerPermission.ReadWrite,
-                      expiryTime: DateTime.UtcNow.AddHours(4).ToUniversalTime()
-                  );
+            var sasUri = new Uri(response.AssetContainerSasUrls.First());
 
-                var sasUri = new Uri(response.AssetContainerSasUrls.First());
+            _log.LogInformation($"Uploading {fileToUpload}");
+            // Use Strorage API to upload the file into the container in storage.
+            _storageHelpers.CopyBlobAsync(sasUri, fileToUpload).Wait();
+            _log.LogInformation("Upload Complete");
 
-                // Use Storage API to get a reference to the Asset container
-                // that was created by calling Asset's CreateOrUpdate method.
+            asset = client.Assets.GetAsync(resourceGroupName, accountName, assetName, new System.Threading.CancellationToken()).Result;
 
-                _log.LogInformation($"Uploading {fileToUpload}");
-                // Use Strorage API to upload the file into the container in storage.
-                await _storageHelpers.CopyBlobAsync(sasUri, fileToUpload);
-                _log.LogInformation("Upload Complete");
-            }
+
             return asset;
         }
         // </CreateInputAsset>
 
+        /// <summary>
+        /// Creates an ouput asset. The output from the encoding Job must be written to an Asset.
+        /// </summary>
+        /// <param name="client">The Media Services client.</param>
+        /// <param name="resourceGroupName">The name of the resource group within the Azure subscription.</param>
+        /// <param name="accountName"> The Media Services account name.</param>
+        /// <param name="assetName">The output asset name.</param>
+        /// <returns></returns>
+        // <CreateOutputAsset>
+        private async Task<Asset> CreateOutputAssetAsync(IAzureMediaServicesClient client, string resourceGroupName, string accountName, string assetName)
+        {
+            // Check if an Asset already exists
+            Asset outputAsset = await client.Assets.GetAsync(resourceGroupName, accountName, assetName);
+            Asset asset = new Asset();
+            string outputAssetName = assetName;
+
+            if (outputAsset != null)
+            {
+                // Name collision! In order to get the sample to work, let's just go ahead and create a unique asset name
+                // Note that the returned Asset can have a different name than the one specified as an input parameter.
+                // You may want to update this part to throw an Exception instead, and handle name collisions differently.
+                string uniqueness = $"-{Guid.NewGuid().ToString("N")}";
+                outputAssetName += uniqueness;
+            }
+
+            return await client.Assets.CreateOrUpdateAsync(resourceGroupName, accountName, outputAssetName, asset);
+        }
+        // </CreateOutputAsset>
         #endregion Asset Methods
 
         #region Streaming Methods
@@ -375,7 +380,7 @@ namespace AzureMediaServicesDemo.Shared
             {
                 if (path.Paths.Count > 0)
                 {
-                    streamingURLs.Add("http://" + streamingUrlPrefx + path.Paths[0].ToString());
+                    streamingURLs.Add("https://" + streamingUrlPrefx + path.Paths[0].ToString());
                 }
             }
 
