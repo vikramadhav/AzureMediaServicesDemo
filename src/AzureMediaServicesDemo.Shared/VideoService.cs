@@ -62,7 +62,17 @@ namespace AzureMediaServicesDemo.Shared
                 // The default value is 30 seconds for the .NET client SDK
                 client.LongRunningOperationRetryTimeout = 2;
 
-                await _amsHelpers.ProcessVideo(client, fileName);
+                var videos = await GetVideos();
+
+                if (!videos.Any(a => a.Name == fileName))
+                {
+                    await _amsHelpers.ProcessVideo(client, fileName);
+                }
+                else
+                {
+                    await _storageHelpers.DeleteBlobAsync(fileName);
+                    _log.LogInformation($"Video: {fileName} has already been processed.");
+                }
             }
             catch (ApiErrorException ex)
             {

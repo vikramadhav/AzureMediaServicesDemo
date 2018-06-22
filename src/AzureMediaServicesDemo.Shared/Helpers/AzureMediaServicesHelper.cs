@@ -98,7 +98,7 @@ namespace AzureMediaServicesDemo.Shared
         // <ProcessVideo>
         public async Task ProcessVideo(IAzureMediaServicesClient client, string fileName)
         {
-          await  GetOrCreateTransformAsync(client, _config.ResourceGroup, _config.AccountName, AdaptiveStreamingTransformName);
+            await GetOrCreateTransformAsync(client, _config.ResourceGroup, _config.AccountName, AdaptiveStreamingTransformName);
 
             // Creating a unique suffix so that we don't have name collisions if you run the sample
             // multiple times without cleaning up.
@@ -138,6 +138,7 @@ namespace AzureMediaServicesDemo.Shared
                 var streamingUrl = urls.Where(a => a.EndsWith("manifest")).FirstOrDefault();
 
                 await _storageHelpers.InsertTableRecord(fileName, streamingUrl);
+                await _storageHelpers.DeleteBlobAsync(fileName);
                 _log.LogInformation("Stream Processing Complete");
             }
         }

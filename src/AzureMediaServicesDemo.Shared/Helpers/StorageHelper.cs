@@ -15,6 +15,8 @@ namespace AzureMediaServicesDemo.Shared
         CloudTable GetTable();
 
         Task InsertTableRecord(string name, string uri);
+
+        Task DeleteBlobAsync(string fileName);
     }
 
     /// <summary>
@@ -65,6 +67,20 @@ namespace AzureMediaServicesDemo.Shared
             await destBlob.StartCopyAsync(new Uri(sourceBlob.Uri.AbsoluteUri + signature));
         }
         // </CopyBlobAsync>
+
+        /// <summary>
+        /// Deletes video from input container
+        /// </summary>
+        /// <param name="fileName">The name of the file to delete</param>
+        /// <returns></returns>
+        // <DeleteBlobAsync>
+        public async Task DeleteBlobAsync(string fileName)
+        {
+            CloudBlobContainer sourceContainer = GetCloudBlobContainer(containerName);
+            var sourceBlob = sourceContainer.GetBlockBlobReference(fileName);
+            await sourceBlob.DeleteIfExistsAsync();
+        }
+        // </DeleteBlobAsync>
 
 
         /// <summary>
