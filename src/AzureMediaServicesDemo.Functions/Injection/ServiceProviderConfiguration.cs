@@ -16,17 +16,15 @@ namespace AzureMediaServicesDemo.Functions.Injection
         public const string LogCategoryWorker = "Worker";
         public const string LogCategoryCustom = "AzureMediaServicesDemo";
 
-        public static IServiceProvider Configure(ExtensionConfigContext context)
+        public static IServiceProvider Configure(ExtensionConfigContext context, ILoggerFactory factory)
         {
 
             var configBuilder = new Microsoft.Extensions.Configuration.ConfigurationBuilder();
             var serviceCollection = new ServiceCollection();
 
-            var factory = context.Config.LoggerFactory;
-
             if (factory == null)
             {
-                throw new InvalidOperationException($"{nameof(context.Config.LoggerFactory)} in {nameof(ExtensionConfigContext)} cannot be null. Unable to refresh log filters");
+                throw new InvalidOperationException($"{nameof(factory)} in {nameof(ExtensionConfigContext)} cannot be null. Unable to refresh log filters");
             }
 
             var refreshFilters = factory.GetType().GetMethod("RefreshFilters", BindingFlags.NonPublic | BindingFlags.Instance);

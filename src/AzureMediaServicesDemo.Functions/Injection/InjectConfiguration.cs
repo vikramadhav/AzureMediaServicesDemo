@@ -1,5 +1,6 @@
 ﻿using Microsoft.Azure.WebJobs.Host.Config;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -10,6 +11,14 @@ namespace AzureMediaServicesDemo.Functions.Injection
     {
         private static readonly object SyncLock = new object();
         private static IServiceProvider _provider;
+
+        private readonly ILoggerFactory factory;
+
+        public InjectConfiguration(ILoggerFactory _factory)
+        {
+            factory = _factory;
+        }
+
 
         public void Initialize(ExtensionConfigContext context)
         {
@@ -35,7 +44,7 @@ namespace AzureMediaServicesDemo.Functions.Injection
                 }
 
 
-                _provider = ServiceProviderConfiguration.Configure(context);
+                _provider = ServiceProviderConfiguration.Configure(context, factory);
             }
         }
     }
