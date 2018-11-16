@@ -26,7 +26,7 @@ namespace AzureMediaServicesDemo.Shared
     {
         private const string AdaptiveStreamingTransformName = "MyTransformWithAdaptiveStreamingPreset";
         private readonly IStorageHelper _storageHelpers;
-        private readonly ILogger<AzureMediaServicesHelper> _log;
+        private readonly ILogger _log;
         private readonly ConfigWrapper _config;
 
         /// <summary>
@@ -35,7 +35,7 @@ namespace AzureMediaServicesDemo.Shared
         /// <param name="log">Instance of ILogger resolved via DI.</param>
         /// <param name="config">Instance of ConfigWrapper which is Env Variables.</param>
         /// <param name="storageHelper">Instance of IStorageHelper service to interact with Azure Storage</param>
-        public AzureMediaServicesHelper(ConfigWrapper config, ILogger<AzureMediaServicesHelper> log, IStorageHelper storageHelper)
+        public AzureMediaServicesHelper(ConfigWrapper config, ILogger log, IStorageHelper storageHelper)
         {
             _config = config;
             _log = log;

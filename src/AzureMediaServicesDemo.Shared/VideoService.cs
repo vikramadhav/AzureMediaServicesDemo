@@ -24,7 +24,7 @@ namespace AzureMediaServicesDemo.Shared
     /// </remarks>
     public class VideoService : IVideoService
     {
-        private readonly ILogger<VideoService> _log;
+        private readonly ILogger _log;
         private readonly ConfigWrapper _config;
 
         private readonly IAzureMediaServicesHelper _amsHelpers;
@@ -37,7 +37,7 @@ namespace AzureMediaServicesDemo.Shared
         /// <param name="config">Instance of ConfigWrapper which is Env Variables.</param>
         /// <param name="amsHelper">Instance of IAzureMediaServicesHelpers service to interact with AMS</param>
         /// <param name="storageHelper">Instance of IStorageHelper service to interact with Azure Storage</param>
-        public VideoService(ILogger<VideoService> log, ConfigWrapper config, IAzureMediaServicesHelper amsHelper, IStorageHelper storageHelper)
+        public VideoService(ILogger log, ConfigWrapper config, IAzureMediaServicesHelper amsHelper, IStorageHelper storageHelper)
         {
             _log = log;
             _config = config;
@@ -94,7 +94,8 @@ namespace AzureMediaServicesDemo.Shared
             var entities = new List<Video>();
             do
             {
-                var queryResult = await _storageHelpers.GetTable().ExecuteQuerySegmentedAsync(new TableQuery<Video>(), token);
+                var table = await _storageHelpers.GetTable();
+                var queryResult = await table.ExecuteQuerySegmentedAsync(new TableQuery<Video>(), token);
                 entities.AddRange(queryResult.Results);
                 token = queryResult.ContinuationToken;
 

@@ -47,7 +47,7 @@ namespace AzureMediaServicesDemo.Functions.Injection
             refreshFilters.Invoke(factory, new[] { filterOptions });
 
 
-            var startup = new Startup(factory.CreateLogger<Startup>());
+            var startup = new WebJobsExtensionStartup(factory.CreateLogger<WebJobsExtensionStartup>());
             startup.Configure(configBuilder);
 
             IConfiguration configuration = configBuilder.Build();

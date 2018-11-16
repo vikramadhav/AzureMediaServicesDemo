@@ -12,7 +12,7 @@ namespace AzureMediaServicesDemo.Shared
     {
         Task CopyBlobAsync(Uri sasUri, string fileToUpload);
 
-        CloudTable GetTable();
+        Task<CloudTable> GetTable();
 
         Task InsertTableRecord(string name, string uri);
 
@@ -88,7 +88,7 @@ namespace AzureMediaServicesDemo.Shared
         /// </summary>
         /// <returns>CloudTable object representing Azure Table Storage table</returns>
         // <GetTable>
-        public CloudTable GetTable()
+        public async Task<CloudTable> GetTable()
         {
             // Retrieve the storage account from the connection string.
             CloudStorageAccount storageAccount = CloudStorageAccount.Parse(_config.StorageConnectionString);
@@ -96,8 +96,12 @@ namespace AzureMediaServicesDemo.Shared
             // Create the table client.
             CloudTableClient tableClient = storageAccount.CreateCloudTableClient();
 
+            var table = tableClient.GetTableReference(tableName);
+
+            await tableClient.GetTableReference(tableName).CreateIfNotExistsAsync();
+
             // Create the CloudTable object that represents the "people" table.
-            return tableClient.GetTableReference(tableName);
+            return table;
         }
         // </GetTable>
 
@@ -110,7 +114,7 @@ namespace AzureMediaServicesDemo.Shared
         // <InsertTableRecord>
         public async Task InsertTableRecord(string name, string uri)
         {
-            var table = GetTable();
+            var table = await GetTable();
 
             await table.CreateIfNotExistsAsync();
             var video = new Video(Guid.NewGuid().ToString())
